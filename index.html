@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizForge - 測驗與錯題神器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #D4FF33; 
+            --primary-hover: #BBE022;
+            --bg: #111111;
+            --card-bg: #1E1E1E;
+            --text-main: #FFFFFF;
+            --text-muted: #9CA3AF;
+            --border: #333333;
+            --success-bg: rgba(74, 222, 128, 0.1);
+            --success-border: #4ADE80;
+            --danger-bg: rgba(248, 113, 113, 0.1);
+            --danger-border: #F87171;
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { 
+            background-color: var(--bg); color: var(--text-main); 
+            margin: 0; padding: 0; display: flex; flex-direction: column; 
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: var(--card-bg); padding: 15px 20px;
+            border-bottom: 1px solid var(--border); display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .logo { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+        
+        button {
+            background-color: var(--primary); color: #111; border: none; font-weight: bold;
+            padding: 10px 20px; border-radius: var(--radius); cursor: pointer;
+            font-size: 1rem; transition: background 0.2s;
+        }
+        button:hover { background-color: var(--primary-hover); }
+        button.outline {
+            background-color: transparent; color: var(--text-main);
+            border: 1px solid var(--border); font-weight: normal;
+        }
+        button.outline:hover { background-color: #333; }
+
+        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; flex: 1; width: 100%; }
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .card {
+            background: var(--card-bg); padding: 25px; border-radius: var(--radius);
+            border: 1px solid var(--border); margin-bottom: 20px;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border); border-radius: var(--radius);
+            padding: 40px; text-align: center; color: var(--text-muted);
+            cursor: pointer; transition: border-color 0.2s; background: #161616;
+        }
+        .drop-zone.dragover { border-color: var(--primary); }
+        textarea {
+            width: 100%; height: 150px; padding: 15px; border: 1px solid var(--border);
+            border-radius: var(--radius); resize: vertical; margin-top: 15px; font-size: 1rem;
+            background: #161616; color: var(--text-main);
+        }
+
+        .settings-group label { margin-right: 15px; cursor: pointer; }
+        .q-count-selector { margin-top: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;}
+        
+        .q-count-selector input[type="text"] { 
+            width: 230px; padding: 6px; border: 1px solid var(--border); 
+            border-radius: 4px; background: #161616; color: white; font-size: 0.9rem;
+        }
+        .q-count-selector input[type="text"]::placeholder { color: #777; }
+        .q-count-selector input[type="text"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .quiz-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 20px;}
+        
+        .option-label {
+            display: block; padding: 15px; margin-bottom: 10px; border: 1px solid var(--border);
+            border-radius: var(--radius); cursor: pointer; transition: all 0.2s; background: #1A1A1A;
+        }
+        .option-label:hover { background: #2A2A2A; }
+        .option-label.selected { border-color: var(--primary); background: rgba(212, 255, 51, 0.05); }
+        .option-label.correct-ans { border-color: var(--success-border); background: var(--success-bg); }
+        .option-label.wrong-ans { border-color: var(--danger-border); background: var(--danger-bg); }
+        
+        .option-label b { color: var(--primary); margin-right: 5px; }
+        .option-label.correct-ans b { color: var(--success-border); }
+        .option-label.wrong-ans b { color: var(--danger-border); }
+
+        .quiz-footer { display: flex; justify-content: space-between; margin-top: 20px; }
+        .hint { text-align: right; color: var(--text-muted); font-size: 0.8rem; margin-top: 15px; }
+
+        .result-summary { text-align: center; }
+        .score-circle { font-size: 3rem; font-weight: bold; color: var(--primary); margin: 20px 0; }
+        .stats-cards { display: flex; justify-content: center; gap: 20px; margin-bottom: 30px; }
+        .stat-card { padding: 20px; border-radius: var(--radius); min-width: 120px; text-align: center; border: 1px solid var(--border); }
+        .stat-card h3 { margin: 0; font-size: 2rem; }
+        
+        .action-buttons { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+        .details-section { margin-top: 40px; text-align: left;}
+        .detail-item { padding: 15px; border-left: 4px solid var(--border); background: var(--card-bg); margin-bottom: 10px; }
+        
+        .flashcard-container { perspective: 1000px; cursor: pointer; margin-bottom: 20px; }
+        .flashcard-inner {
+            transition: transform 0.6s; transform-style: preserve-3d;
+            width: 100%; min-height: 300px; display: grid;
+        }
+        .flashcard-inner.flipped { transform: rotateY(180deg); }
+        .flashcard-front, .flashcard-back {
+            grid-area: 1 / 1; backface-visibility: hidden; position: relative;
+            width: 100%; display: flex; flex-direction: column;
+            justify-content: center; align-items: flex-start;
+            padding: 50px 30px 30px 30px;
+            background: var(--card-bg); border-radius: var(--radius); border: 1px solid var(--border);
+            text-align: left; font-size: 1.1rem; box-sizing: border-box;
+        }
+        .flashcard-back { transform: rotateY(180deg); background: #161616; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center;
+            z-index: 1000; display: none;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: var(--card-bg); padding: 30px; border-radius: var(--radius); text-align: center; max-width: 400px; border: 1px solid var(--border); }
+        .modal-buttons { margin-top: 20px; display: flex; justify-content: space-around; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">QuizForge</div>
+        <button class="outline" onclick="openFlashcards()">⧉ 錯題閃卡 (<span id="header-wrong-count">0</span>)</button>
+    </header>
+
+    <div class="container">
+        <div id="home-screen" class="screen active">
+            <div class="card">
+                <div id="drop-zone" class="drop-zone">
+                    <h3>⇪ 點擊或拖曳檔案至此</h3>
+                    <p>支援 .txt 或 .pdf 格式</p>
+                    <input type="file" id="file-input" accept=".txt,.pdf" style="display:none;">
+                </div>
+                <textarea id="source-text" placeholder="請輸入題目或上傳檔案。">
+1.(3) 依據「建築物電信設備及空間設置使用管理規則」規定，建築物內專供市內網路業務經營者引接線纜及設置電信設備之專用空間，稱為①配線室②電信機械室③電信室④工作室。
+2.(4) 依據「建築物電信設備及空間設置使用管理規則」規定，屋外電信管線設施，不含①建築基地內建築物間之架空管線設備②建築基地內建築物間之地下電信線路設備③建築基地內建築物間地下管路管線設備④建築基地外建築物間之地上電信線路設備。
+3.(4) 「建築物電信設備及空間設置使用管理規則」關於建築物電信設備之規定，下列何者不正確？①建築物建造時，起造人應依規定設置屋內外電信設備，並預留裝置電信設備之電信室及其他空間②電信設備，包括電信引進管、總配線箱、用戶端子板、電信管箱、電信線纜及其他因用戶電信服務需求須由用戶配合設置責任分界點以內之設備③既存建築物之電信設備不足或供裝置電信設備之空間不足，致不敷該建築物之電信服務需求時，應由所有人與提供電信服務之市內網路業務經營者協商，並由所有人增設④依規定設置專供該建築物使用之電信設備及空間，應按該建築物用戶之電信服務需求，由各市內網路業務經營者依規定收費連接及使用。
+4.(2) 依據「建築物電信設備及空間設置使用管理規則」規定，以架空或地下方式引進電信電纜或光纜至建築物內總配線箱或電信室之電信管道，稱為①電信機械設備管②電信引進管③屋外電信管線④屋內電信管線。
+5.(2) 「建築物電信設備及空間設置使用管理規則」關於建築物電信設備連接市內網路業務經營者之電信網路設備之責任分界點規定，下列何者不正確？①建築物電信設備連接市內網路業務經營者之電信網路設備，應設有明確之責任分界點②建築物引進電纜者，建築物未設置用戶側端子板設備者，以市內網路業務經營者設置於業者機房端子板之電介接端子為責任分界③建築物引進電纜者，建築物設置用戶側端子板設備者，以用戶側端子板之電介接端子為責任分界④建築物引進光纜者，建築物設置光終端配線架者，以光終端配線架用戶側光纜配線箱之光介接端子為責任分界。
+6.(1) 依據「建築物電信設備及空間設置使用管理規則」規定，地上層五樓以上，且設有地下室之新建建築物為收容市內網路業務經營者之電信設備，供該建築物用戶通信之需要，引進電纜總對數最多為多少對以下者，可不設置電信室①20對②30對③40對④60對。
+7.(2) 依據「建築物電信設備及空間設置使用管理規則」規定，新建建築物為收容市內網路業務經營者之電信設備，供該建築物用戶通信之需要，一般有下列情形者，應設置電信室①用戶側光纜總心數超過12心者②地上層5樓以上且設有地下室之建築物，引進電纜總對數超過20對以上者③地上層3樓以上且設有地下室之建築物④地上層5樓以上不論是否設有地下室之建築物。
+8.(3) 依據「建築物電信設備及空間設置使用管理規則」規定，引進電纜總對數4001~6000對者，其電信室面積最小為①14m²以上②30m²以上③43m²以上④54m²以上。
+9.(3) 「建築物電信設備及空間設置使用管理規則」關於建築物電信設備連接市內網路業務經營者之電信網路設備之規定，下列何者正確？①市內網路業務經營者為建設其電信網路之需要，得無償使用建築物空間設置集線室及集線電信設備②建築物所有人所設置之電信設備雖不符NCC規則之規定，於建築物所有人改善或增設前，市內網路業務經營者仍可予銜接提供服務③市內網路業務經營者為建設其電信網路之需要，得有償使用建築物空間設置集線室及集線電信設備④連接第一類電信事業之建築物責任分界點以內之所有電信設備，為節省經費，可交由非電信工程業者，亦非電器承裝業者施工及維護。
+10.(4) 依據「建築物屋內外電信設備設置技術規範」規定，主幹配線系統之水平及垂直幹管電信配管器材規格，其材質不得採用①導電線用聚氯乙烯(PVC)硬質管②電線用鋼管③合成樹脂可撓電線導管④導電線用聚氯乙烯(PVC)軟質管。
+11.(2) 依據「建築物屋內外電信設備設置技術規範」規定，屋內主幹光纜使用之光纖不包括①單模光纖②30/125 µm 多模光纖③50/125µm多模光纖④62.5/125µm多模光纖。
+12.(1) 依據「建築物屋內外電信設備設置技術規範」規定，建築物屋內外電信設備設置技術規範規定 Cat 5e 等級配線規範的最高頻率為①100MHz②125MHz③25MHz④250MHz。
+13.(3) 依據「建築物屋內外電信設備設置技術規範」規定，建築物屋內外電信設備設置技術規範規定 Cat 6等級配線規範的最高頻率為①100MHz②125MHz③250MHz④300MHz。
+14.(3) 依據「建築物屋內外電信設備設置技術規範」規定，建築物屋內外電信設備設置技術規範規定UTP及SCTP之電纜引線特性阻抗標稱值為①100Ω②75Ω③1000Ω④200Ω。
+15.(4) 依據「建築物屋內外電信設備設置技術規範」規定，建築物主幹配線系統架構之配接方式不包括①直接接續②分歧接續③中間交接④間接接續。
+16.(4) 依據「建築物屋內外電信設備設置技術規範」規定，建築物電信設備之設置架構組成不包括①引進設施、配線箱(室)②主幹配線系統③宅內配線系統④宅外配線系統。
+17.(3) 依據「建築物屋內外電信設備設置技術規範」規定，設置於建築物電信室內之金屬組合架，作為引進管線及主幹管線間之介面稱為①光終端配②總配線板③總配線架④總接地箱。
+18.(1) 依據「建築物屋內外電信設備設置技術規範」規定，設置建築物配線室內之金屬組合架，輔助電信室之總配線架，作為樓層配線間之介面，並可與其他樓層配線架互相連接，稱為①樓層配線架②配線板③光終端配線架④電信機械設備。
+19.(2) 依據「建築物電信設備及空間設置使用管理規則」規定，於建築物內除既有電信室外，專供市內網路業務經營者引接線纜及設置集線電信設備之專用空間稱為①主配線室②集線室③拖線箱④總配線箱。
+20.(1) 依據「建築物屋內外電信設備設置技術規範」規定，FS-JF-LAP 市內電纜係①發泡聚乙烯雙層絕緣充膠積層被覆之簇型電纜②彩色聚乙烯絕緣被覆之簇型星絞電纜③絕緣聚氯乙烯被覆之簇型星絞電纜④鋁箔低煙無毒聚乙烯被覆之簇型星絞電纜。
+21.(1) 依據「建築物屋內外電信設備設置技術規範」規定，電信線架材質不應採用何種材質製作？①聚氯乙烯②鍍鋅碳鋼③不銹鋼④鋁合金。
+22.(1) 依據「建築物屋內外電信設備設置技術規範」規定，下列哪一種電纜不適用於建築物內宅內配線？①FS-JF-LAP 市內電纜②PE-PVC屋內數位電纜③PE-PVC屋內電纜④FRPE-LSNHPE屋內電纜。
+23.(3) 依據「建築物屋內外電信設備設置技術規範」規定，總配線箱應採用經防銹面漆處理之鐵板或不銹鋼板製造，其厚度至少採①1.2mm②1.4mm③1.6mm④1.8mm。
+24.(2) 依據「建築物屋內外電信設備設置技術規範」規定，建築物引進屋內線纜之屋內段超過多少距離者，應全部採用鋼管或密閉式不燃性線槽收容①10m②15m③20m④25m。
+25.(2) 依據「建築物屋內外電信設備設置技術規範」規定，總配線箱最大型號 A-4，於用戶側單獨收容端子之對數為①200對②400對③600對④1200對。
+26.(2) 依據「建築物屋內外電信設備設置技術規範」規定，總配線箱最小型號 A-04-1，於用戶側單獨收容端子之對數為①20對②40對③50對④60對。
+27.(4) 依據「建築物屋內外電信設備設置技術規範」規定，關於總配線箱材質，下列何者不正確？①應採用至少1.6mm以上厚度經防銹面漆處理之鐵板或不銹鋼板製造②應附裝活葉式箱門③應附裝啟閉門栓把手④應使用防火塑膠門。
+28.(2) 依據「建築物屋內外電信設備設置技術規範」規定，關於總配線箱箱內底面，下列何者不正確？①須裝設與底面積相當之底板②須裝設活動底板③須裝設不可燃性之底板④須裝設固定底板。
+29.(3) 依據「建築物屋內外電信設備設置技術規範」規定，種類為B-54之主配線箱，其單獨收容端子之對數為①10對②30對③50對④70對。
+30.(3) 依據「建築物屋內外電信設備設置技術規範」規定，種類為B-54之主配線箱，其內部寬度為①24 cm②48 cm③56 cm④72 cm。
+31.(4) 依據「建築物屋內外電信設備設置技術規範」規定，種類為B-54之主配線箱，其收容垂直管數量為①1管②2管③3管④4管。
+32.(2) 依據「建築物屋內外電信設備設置技術規範」規定，種類為B-12之主配線箱，其單獨收容端子之對數為①8對②10對③12對④20對。
+33.(2) 依據「建築物屋內外電信設備設置技術規範」規定，種類為B-12之主配線箱，其內部寬度為①20cm②30cm③38cm④48cm。
+34.(2) 依據「建築物屋內外電信設備設置技術規範」規定，種類為B-12之主配線箱，其收容垂直管數量為①1管②2管③3管④4管。
+35.(2) 依據「建築物屋內外電信設備設置技術規範」規定，地下電纜引進管管徑41mm(1.5")，引進線纜最多對數為①20對②30對③50對④100對。
+36.(3) 依據「建築物屋內外電信設備設置技術規範」規定，地下電纜引進管管徑52mm(2")，引進線纜最多對數為①20對②50對③200對④300對。
+37.(3) 依據「建築物屋內外電信設備設置技術規範」規定，引進光纜之心數超過96心者，其引進管管徑應採①28 mm(1")②41mm(1.5")③52 mm(2")④80 mm(3")。
+38.(4) 依據「建築物屋內外電信設備設置技術規範」規定，直式電信插座(JACK)，離地板高度應為①30cm②80 cm③120 cm④130 cm。
+39.(2) 依據「建築物屋內外電信設備設置技術規範」規定，總配線架(MDF)之設置容量，應依引進電纜對數(或稱經營者引進電纜容量)和配線對數設計，選用適當型式之總配線架，MDF-6型式引進對數為①400對②600對③1200對④2000對。
+40.(3) 依據「建築物屋內外電信設備設置技術規範」規定，總配線架(MDF)之設置容量，應依引進電纜對數(或稱經營者引進電纜容量)和配線對數設計，選用適當型式之總配線架，MDF-6型式選用單側MDF時所需縱架數為①3架②4架③5架④8架。
+41.(4) 依據「建築物屋內外電信設備設置技術規範」規定，總配線架(MDF)之設置容量，應依引進電纜對數(或稱經營者引進電纜容量)和配線對數設計，選用適當型式之總配線架，MDF-36型式引進對數為①2400對②8600對③7200對④3600對。
+42.(4) 依據「建築物屋內外電信設備設置技術規範」規定，光終端配線架之機櫃區分為①機架型與組合型②組合型與壁掛型③壁掛式與地板型④落地型與壁掛式。
+43.(3) 依據「建築物屋內外電信設備設置技術規範」規定，建築物用途為住宅用(含透天式獨戶店鋪、透天式獨戶住宅)建築，未引進光纜建築物之電纜線對數，其電纜電信線對數估計係數值為①0.01p/m²②0.02p/m²③0.03p/m²④0.04p/m²。
+44.(4) 依據「建築物屋內外電信設備設置技術規範」規定，下列何者不是宅內配線系統架構之配線方式？①一般宅內配線②多使用者出線匣配線③集中轉接點配線④間接接續配線。
+45.(1) 依據「建築物屋內外電信設備設置技術規範」規定，採對絞型數據電纜作為主幹配線，佈放時兩端應預留多少距離？①30cm②25cm③20cm④15cm。
+46.(3) 依據「建築物屋內外電信設備設置技術規範」規定，關於光纜配接線接續作業應注意事項，下列何者不正確？①應注意使切面平滑及垂直②接續場所嚴禁煙火③單模多模光纜可混用④嚴禁使用去漬油、柴油清洗裸光纖。
+47.(3) 依據「建築物屋內外電信設備設置技術規範」規定，關於光纖接續後之處理，下列何者不正確？①將接好之光纖盤繞於收容盒，將接續點置於槽流內②依序將接好之光纖及接續點固定於收容盒③無須依原設計方式固定收容盒④將收容盒蓋上，不可壓到光纖。
+48.(2) 依據「建築物屋內外電信設備設置技術規範」規定，關於主幹配線設計原則，下列何者不正確？①建築物內主幹線纜之對數，依各層樓主配線箱之配線對數之累計值設計②PE-PVC電纜配線方式，原則上自底層開始依心線編號順序連續配接，不得重複③主幹線纜應順序編號，按電纜配接至MDF(或總配線箱)內之順序排列④每一區分所有權之主出線匣須註明對數及電纜編號。
+49.(4) 依據「建築物屋內外電信設備設置技術規範」規定，關於垂直幹管設計原則，下列何者不正確？①垂直幹管每一路由至少須設計二管(含預備管一管)②總管數最多六管(不含接地導線用PVC管或CD/PF管)③垂直幹管設計管數超過六管時，應設計電信專用管道間或於公共管道間內預留電信專用位置④建議光纜與其他電纜佈放於同一垂直幹管。
+50.(4) 依據「建築物屋內外電信設備設置技術規範」規定，關於垂直幹管之設計，下列何者不正確？①垂直幹管每一路由各層服務面積以不超過990m²(300坪)為原則②路由型態自底樓至頂樓，原則上應採取垂直直線型式③如採用線架式，原則上下每隔一段距離應設置水平支架④垂直幹管引進各類配線箱，應由配線箱底板或中間位置接入力。
+51.(4) 依據「建築物屋內外電信設備設置技術規範」規定，關於主幹配線、配管施工工法及注意事項，下列何者不正確？①佈放之主幹電纜以 Cat 5e提供數據服務時，最大配線長度為90m②佈放之主幹電纜以Cat 5e，配線箱(室)及總配線箱內跳線或設備線的總長度不可超過10m③佈放電纜應注意預留兩端餘長約30cm，作為未來接續使用，並應於兩端設置標籤④採用PE-PVC 電纜設計主配線時，採T接設計。
+52.(3) 依據「建築物屋內外電信設備設置技術規範」規定，屋內主幹光纜的彎曲半徑，無製造商建議值時，佈放後其彎曲半徑不可少於該光纜外徑的多少倍？①2倍②5倍③10倍④15倍。
+53.(3) 依據「建築物屋內外電信設備設置技術規範」規定，屋內主幹光纜佈放中承受拉力時，其彎曲半徑不可少於該光纜外徑的多少倍？①5倍②10倍③15倍④20倍。
+54.(3) 依據「建築物屋內外電信設備設置技術規範」規定，屋外主幹光纜的彎曲半徑，無製造商建議值時，佈放後其彎曲半徑不可少於該光纜外徑的多少倍？①2倍②5倍③10倍④15倍。
+55.(4) 依據「建築物屋內外電信設備設置技術規範」規定，屋外主幹光纜佈放中承受拉力時，其彎曲半徑不可少於該光纜外徑的倍數為①5倍②10倍③15倍④20倍。
+56.(2) 依據「建築物屋內外電信設備設置技術規範」規定，屋外主幹光纜佈放中承受之拉力不得超過該光纜之規格值，通常的參考值為①267N②2670N③26700N④2.67N。
+57.(3) 依據「建築物屋內外電信設備設置技術規範」規定，裝設總配線箱時，下列何者不正確？①下緣不得低於距地面0.3m②頂端不得高於地面1.8m③寬度不得小於2m④避免設置於樓梯間臺階側壁。
+58.(2) 依據「建築物電信設備及空間設置使用管理規則」規定，引進電纜總對數超過20對以上之新建建築物，地上最低多少層樓以上且設有地下室之建築物，應設置電信室？①3層②5層③7層④10層。
+59.(2) 依據「建築物屋內外電信設備設置技術規範」規定，設置有電信室之建築物內設置之電信管線，應附設電信保安接地設備，其電阻值應為①5Ω以下②10Ω以下③15Ω以下④25Ω以下。
+60.(3) 依據「建築物屋內外電信設備設置技術規範」規定，跨越公路或道路的電信架空線路之設置，除因地形、環境等特殊情形外，線纜之最低部分與地面之最低垂直距離應為①2.5m②4.5m③5.0m④6.0m。
+61.(3) 依據「建築物屋內外電信設備設置技術規範」規定，光資訊插座盒(outlet box)所收容之光纖，其彎曲半徑須遵守製造商之規定，無建議值時，不得少於多少距離？①5 mm②15 mm③30 mm④35 mm。
+62.(3) 依據「建築物屋內外電信設備設置技術規範」規定，大型建築物如於公共走道上方水平方向佈設水平屋內電纜時，應每隔多少距離設置固定線架？①10-20 cm②20-30 cm③30-50 cm④50-70 cm。
+63.(2) 依據「建築物屋內外電信設備設置技術規範」規定，資訊插座安裝時，將絞距鬆開至多需小於多少距離？①5mm②13mm③23 mm④33mm。
+64.(2) 依據「建築物屋內外電信設備設置技術規範」規定，電信配管與瓦斯管、暖氣管至少應相隔多少距離？①15cm②30 cm③50 cm④100 cm。
+65.(1) 依據「建築物屋內外電信設備設置技術規範」規定，電信配管與低壓電力線至少應相隔多少距離？①15cm②30cm③50 cm④100 cm。
+66.(3) 依據「建築物屋內外電信設備設置技術規範」規定，建築物內主幹線纜之垂直幹管，每一路由服務各樓層最大面積為何？①330m²(100坪)②660m² (200坪)③990m²(300坪)④1320m² (400坪)。
+67.(2) 依據「建築物屋內外電信設備設置技術規範」規定，建築物內主幹線纜之垂直幹管如採用線架式，原則上每隔多少距離應設置一水平支架？①30-60 cm②60-100 cm③100-150 cm④200-300 cm。
+68.(1) 依據「建築物屋內外電信設備設置技術規範」規定，建築物內主幹線纜，每層樓管道間內之管箱設備前，應具備之最小工作空間尺寸為何？①60cm寬×200cm高×90cm深②60cm寬×300cm高×60cm深③100cm寬×400cm高×100cm深④100cm寬×500cm高×120cm深。
+69.(2) 依據「建築物屋內外電信設備設置技術規範」規定，引進管之彎曲，其彎曲半徑應為管外徑之幾倍以上？①3倍②6倍③12倍④15倍。
+70.(2) 依據「建築物屋內外電信設備設置技術規範」規定，人孔內線纜彎曲之曲率半徑不可少於電纜外徑之倍數為何？①3倍②6倍③12倍④15倍。
+71.(3) 依據「建築物屋內外電信設備設置技術規範」規定，屋外電信線路在多少距離以內者，以不做中間接續為原則①100m②200m③500m④1000m。
+72.(4) 如果兩台電腦同時在網路上傳送資料，使用匯流排拓樸架構的網路，可能會造成下列何種問題？①不會出現任何傳送上的問題②容易造成伺服器的負擔增加③容易因為網路頻寬不足，造成其他台電腦無法傳送資料④容易發生網路碰撞，必須等待一段時間才能傳送資料。
+73.(3) 關於乙太網路使用無遮蔽式雙絞線(unshielded twisted pair, UTP)及同軸電纜，下列何者正確？①不同等級的雙絞線，其最大傳輸距離皆相同②雙絞線的最高傳輸速率比同軸電纜的最高傳輸速率低③同軸電纜的最大傳輸距離比雙絞線的最大傳輸距離遠④等級1與等級5的雙絞線，傳輸速率較高的是等級1的雙絞線。
+74.(2) 依據「建築物屋內外電信設備設置技術規範」規定，建築物之引進管及建築物內各樓層之配管，應設置拖線箱以利線纜之佈放及接續之條件，不包含下列何者？①其長度超過25m②其彎曲角度之和超過120度③其一次彎曲角度大於90度④其彎曲點超過二處。
+75.(1) 依據「建築物電信設備及空間設置使用管理規則」規定，須引進光纜之建築物，應增設之設備為何？①OLDF②OTDR③WiFi AP④Cable Modem。
+76.(3) 依據「建築物電信設備及空間設置使用管理規則」規定，何種新建築物須引進光纜？①學校教職員宿舍②單戶透天住宅③公有建築物④總樓地板面積在1000m²以下之商辦大樓。
+77.(4) 依據「建築物電信設備及空間設置使用管理規則」規定，須引進光纜之建築物，非必要增設之設備為何？①光終端配線架②用戶側光纜配線箱③宅內配線、出線匣及資訊插座等設備④OTDR。
+78.(3) 依據「建築物屋內外電信設備設置技術規範」規定，下列何種設備不屬電信及有線廣播電視管箱設備？①總配線箱②光終端配線架③光資訊插座④地板線槽。
+79.(4) 依據「建築物電信設備及空間設置使用管理規則」規定，公有建築物引進光纜，不須增設之電信設備為何？①光終端配線架②配線箱間之光纜③用戶側光纜配線箱④OTDR。
+80.(1) 依據「建築物屋內外電信設備設置技術規範」規定，A-4總配線箱，其收容之端子數及用戶側光纜心數為何？①100/200P+24C②200/400P+24C③100/200P+36C④200/400P+36C。
+81.(3) 依據「建築物屋內外電信設備設置技術規範」規定，A-04-1總配線箱，其收容之端子數及用戶側光纜心數為何？①10/20P+6C②20/40P+6C③10/20P+8C④30/60P+8C。
+82.(1) 依據「建築物屋內外電信設備設置技術規範」規定，屋內光纜使用單模光纖者，其規格應符合何種規範？①ITU-T G.652D/657A②ITU-T E.212③ISO 50220④ETSI EN 300 437。
+83.(1) 依據「建築物屋內外電信設備設置技術規範」規定，光終端配線架採OLDF-3者，可引進之光纖心數為何？①300②400③450④800。
+84.(4) 被動光纖網路(Passive optical network, PON)，不包括下列何者？①ATM-PON②Broadband-PON③Ethernet-PON④Next-PON。
+85.(1234) 依據「建築物屋內外電信設備設置技術規範」規定，建築物電信設備設置架構，主要包括①引進設施②配線箱/室③主幹配線系統④宅內配線系統。
+86.(123) 依據「建築物屋內外電信設備設置技術規範」規定，專供市內網路業務經營者引接線纜及設置電信設備之空間，包括①電信室②總配線箱③集中總箱④宅內配線箱。
+87.(12) 依據「建築物屋內外電信設備設置技術規範」規定，主幹配線系統為星狀架構，其配線系統之組成，包括哪些？①垂直主幹配線系統②水平主幹配線系統③宅內配線系統④混合主幹配線系統。
+88.(123) 依據「建築物屋內外電信設備設置技術規範」規定，主幹配線系統架構之配接方式，包括哪些？①直接接續②分歧接續③中間交接④混合接續。
+89.(12) 依據「建築物屋內外電信設備設置技術規範」規定，建築物之引進屋內線纜超過15m者，該引進屋內線纜之屋內段，應全部採用何種材質收容？①電線用鋼管②密閉式不燃性線槽③硬質PVC厚管④PVC厚管。
+90.(123) 依據「建築物屋內外電信設備設置技術規範」規定，下列哪些屬於電信設備繪製圖？①建築物基地位置圖②垂直昇位圖③平面配置圖④水平昇位圖。
+91.(123) 依據「建築物屋內外電信設備設置技術規範」規定，住宅用建築物於每一「單位」應至少設置1個出線匣及2個電信插座；其中「單位」包括哪些？①客廳②臥室③書房④廁所。
+92.(12) 依據「建築物屋內外電信設備設置技術規範」規定，下列哪些屬於資訊插座？①埋入式資訊插座②明線式資訊插座③混合式資訊插座④暗線式資訊插座。
+93.(12) 依據「建築物屋內外電信設備設置技術規範」規定，建築物內設置之電信管線，應附設電信保安接地設備，關於其接地電阻值，下列哪些正確？①一般建築物須在25Ω以下②設置電信室之建築物須在10Ω以下③一般建築物須在15Ω以下④設置電信室之建築物須在5Ω以下。
+94.(123) 依據「建築物屋內外電信設備設置技術規範」規定，建築物內之主幹配管和宅內配管，可使用下列哪些材質？①導電線用聚氯乙烯(PVC)硬質管(E)②電線用鋼管③合成樹脂可撓電線導管④導電線用聚氯乙烯(PVC)軟質管。
+95.(123) 依據「建築物屋內外電信設備設置技術規範」規定，關於宅內配線施作，下列哪些正確？①電信配管內除佈放電信線路外，不可與其他線路共用②線纜兩端及兩端之接續硬體詳加標示識別號碼③宅內線纜(不含兩端跳接線)最大配線長度為90m④宅內配線得有接續點或T接的情形。
+96.(124) 依據「建築物屋內外電信設備設置技術規範」規定，關於建築物宅內管線施工工法，下列哪些正確？①配線管道之彎曲處內側半徑應為管外徑6倍以上②彎曲角度不得大於90度③彎曲點不得超過3處④應注意公眾及工作人員之安全。
+97.(234) 客戶端(Client)於WLAN中連線，需具有哪些組件？①無線滑鼠②無線網路卡③客戶端無線連線軟體④無線基地台(AP)。
+98.(34) 下列哪些為電腦週邊輸出設備？①條碼讀取器②數位相機③耳機④印表機。
+99.(23) 關於光纖網路，下列哪些正確？①熔接式光纖接續比機械式光纖接續插入損失大②光纖接續插入損失及反射損失皆越低越好③光時域反射計(Optical Time Domain Reflectometer, OTDR)之軌跡圖顯示沿光鏈路長度的光纖衰減④通常資料經多模光纖比經單模光纖可傳輸距離長。
+100.(123) 關於光纖元件，下列哪些正確？①光纖耦合器(Coupler)可將多道光耦合在一起②光纖耦合器(Coupler)可將一道光分成多道光輸出③光纖連接器(Connector)為光纖與光纖間活動式接續元件④分波多工器(Wavelength Division Multiplexer)使光纖的折射率產生忽大忽小的變化。
+101.(234) 關於通用串列匯流排(Universal Serial Bus, USB)介面，下列哪些正確？①可連接無限多個周邊裝置②即插即用(Plug-and-play)，並能自動偵測及配置系統資源③具熱插拔特性④USB 3.0 傳輸速率可支援達5.0Gbps。
+102.(13) 下列哪些為光纖之優點？①通訊量大②高損耗③重量輕④價格較便宜。
+103.(234) 下列哪些為網路連接之基本線材？①單心電纜②光纖③同軸電纜④雙絞線。
+104.(123) 下列敘述哪些正確？①傳統電視機是屬於單工傳輸工具②資料在經過網路傳送前，必須先轉換成訊號③增加頻寬可以增加資料傳輸速率④雙絞線適合長距離傳輸，因為不易受到電磁波的干擾。
+</textarea>
+            </div>
+
+            <div class="card">
+                <h3>⛭ 測驗設定</h3>
+                <div class="settings-group">
+                    <label><input type="checkbox" id="shuffle-options" checked> 打亂選項順序</label>
+                    <label><input type="checkbox" id="shuffle-questions"> 隨機題目順序</label>
+                </div>
+                <div class="q-count-selector">
+                    <span>抽取題數：</span>
+                    <label><input type="radio" name="q-count" value="all" checked> 全部</label>
+                    <label><input type="radio" name="q-count" value="10"> 10 題</label>
+                    <label><input type="radio" name="q-count" value="20"> 20 題</label>
+                    <label><input type="radio" name="q-count" value="30"> 30 題</label>
+                    <label><input type="radio" name="q-count" value="custom"> 自訂 <input type="text" id="custom-q-count" disabled placeholder="測驗數量或範圍 (eg. 1-70)"></label>
+                </div>
+                <button style="width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 15px;" onclick="startQuiz()">▶ 解析並開始測驗</button>
+            </div>
+        </div>
+
+        <div id="quiz-screen" class="screen">
+            <div class="card" style="border:none; background: transparent; padding: 0;">
+                <div class="quiz-header">
+                    <h3 id="quiz-progress" style="margin:0; color: var(--text-muted);">題目 1 / 52</h3>
+                    <button class="outline" style="padding: 5px 10px;" onclick="promptEndQuiz()">■ 結束</button>
+                </div>
+                <h2 id="question-text" style="line-height: 1.6; margin-bottom: 25px;"></h2>
+                <div id="options-container"></div>
+                
+                <div id="feedback-box" style="display:none; padding: 15px; margin-top: 15px; border-radius: var(--radius); text-align: center; font-weight: bold; border: 1px solid transparent;"></div>
+                
+                <div class="quiz-footer">
+                    <div></div>
+                    <button id="submit-btn" style="width: 100%; padding: 15px; display: none;" onclick="submitAnswer()"></button>
+                    <button id="next-btn" style="width: 100%; padding: 15px; display: none;" onclick="nextQuestion()">下一題 →</button>
+                </div>
+                <div class="hint">⌨ 提示：按 <b>Enter</b> 或 <b>空白鍵</b> 可快速送出 / 進入下一題</div>
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <div class="card result-summary">
+                <h1># 測驗完成 ★</h1>
+                <div class="score-circle">
+                    <div id="score-percent">100%</div>
+                    <div style="font-size: 1.2rem; color: var(--text-muted);" id="score-fraction">10 / 10</div>
+                </div>
+                <div class="stats-cards">
+                    <div class="stat-card"><h3 id="correct-count" style="color:var(--success-border)">0</h3><p>答對題數</p></div>
+                    <div class="stat-card"><h3 id="wrong-count-display" style="color:var(--danger-border)">0</h3><p>答錯題數</p></div>
+                </div>
+                <div class="action-buttons">
+                    <button onclick="restartQuiz()">⟳ 開始新測驗</button>
+                    <button class="outline" onclick="openFlashcards()">⧉ 複習錯題</button>
+                    <button class="outline" onclick="goHome()">↶ 返回設定</button>
+                </div>
+            </div>
+            <div class="details-section" id="details-section">
+                <h3>☰ 題目詳解</h3>
+                <div id="details-container"></div>
+            </div>
+        </div>
+
+        <div id="flashcard-screen" class="screen">
+            <div style="margin-bottom: 20px; display: flex; justify-content: space-between;">
+                <button class="outline" onclick="goHome()">⌂ 回首頁</button>
+                <button class="outline" style="color: var(--danger-border); border-color: var(--danger-border);" onclick="clearAllFlashcards()">🗑️ 清空錯題本</button>
+            </div>
+            <div class="card" id="empty-flashcard-msg" style="text-align: center; display: none;">
+                <h2>✧</h2><h3>太棒了！您的錯題本空空如也。</h3><p>去進行測驗並發掘需要複習的地方吧！</p>
+            </div>
+            <div id="flashcard-content">
+                <div class="quiz-header"><h3 id="flashcard-progress" style="margin:0; color: var(--text-muted);">進度：1 / 1</h3></div>
+                <div class="flashcard-container" onclick="flipCard()">
+                    <div class="flashcard-inner" id="fc-inner">
+                        <div class="flashcard-front">
+                            <span style="font-size:0.9rem; color:#888; position:absolute; top:15px; left:0; width:100%; text-align:center;">點擊卡片或按 [空白鍵] 翻面</span>
+                            <div id="fc-q-text" style="width:100%;">題目內容...</div>
+                        </div>
+                        <div class="flashcard-back">
+                            <span style="font-size:0.9rem; color:#888; position:absolute; top:15px; left:0; width:100%; text-align:center;">正確答案</span>
+                            <div id="fc-a-text" style="width: 100%; padding-top: 10px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="outline" onclick="prevFlashcard()">← 上一題</button>
+                    <button onclick="markLearned()" style="background: var(--success-bg); color: var(--success-border); border: 1px solid var(--success-border);">✔ 已學會</button>
+                    <button class="outline" onclick="nextFlashcard()">下一題 →</button>
+                </div>
+                <div class="hint">⌨ 提示：可使用 <b>空白鍵</b> 翻面，<b>左右方向鍵</b> 切換題目</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="end-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>確定要結束測驗嗎？</h3><p style="color: var(--text-muted)">目前的進度將會結算為最終成績。</p>
+            <div class="modal-buttons">
+                <button class="outline" onclick="closeModal()">取消</button>
+                <button style="background: var(--danger-border);" onclick="forceEndQuiz()">確定結束</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let parsedQuestions = [], currentTestQuestions = [], currentQuestionIndex = 0;
+        let userAnswers = [], wrongQuestions = JSON.parse(localStorage.getItem('quizForgeWrongQuestions')) || [];
+        let flashcardIndex = 0, isQuizActive = false;
+        
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        updateWrongCountUI();
+        setupEventListeners();
+
+        function setupEventListeners() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+            document.querySelectorAll('input[name="q-count"]').forEach(r => {
+                r.addEventListener('change', (e) => {
+                    const customInput = document.getElementById('custom-q-count');
+                    customInput.disabled = (e.target.value !== 'custom');
+                    if(!customInput.disabled) customInput.focus();
+                });
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+                if (isQuizActive && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    if (document.getElementById('submit-btn').style.display !== 'none') document.getElementById('submit-btn').click();
+                    else if (document.getElementById('next-btn').style.display !== 'none') document.getElementById('next-btn').click();
+                } else if (document.getElementById('flashcard-screen').classList.contains('active')) {
+                    if (e.key === ' ') { e.preventDefault(); flipCard(); }
+                    else if (e.key === 'ArrowRight') nextFlashcard();
+                    else if (e.key === 'ArrowLeft') prevFlashcard();
+                }
+            });
+        }
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+            const file = files[0], textarea = document.getElementById('source-text');
+            if (file.type === 'text/plain') textarea.value = await file.text();
+            else if (file.type === 'application/pdf') {
+                textarea.value = "正在解析 PDF (可能需要數秒鐘)...";
+                try {
+                    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                    let fullText = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        let lastY = -1;
+                        let pageText = '';
+                        for (let item of textContent.items) {
+                            if (lastY !== -1 && Math.abs(item.transform[5] - lastY) > 5) {
+                                pageText += '\n';
+                            }
+                            pageText += item.str;
+                            lastY = item.transform[5];
+                        }
+                        fullText += pageText + '\n';
+                    }
+                    textarea.value = fullText;
+                } catch(err) { textarea.value = "PDF 解析失敗：" + err.message; }
+            } else alert('請上傳 .txt 或 .pdf 格式檔案');
+        }
+
+        function parseText(text) {
+            const normalizedText = text.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/（/g, '(').replace(/）/g, ')');
+            
+            const lines = normalizedText.split('\n').map(l => l.trim()).filter(line => {
+                if (!line) return false;
+                if (/^Page \d+ of \d+/i.test(line)) return false;
+                if (/^---\s*PAGE/i.test(line)) return false;
+                if (/勞動部勞動力發展/i.test(line)) return false;
+                if (/MINISTRY OF LABOR/i.test(line)) return false;
+                if (/WORKFORCE DEVELOPMENT/i.test(line)) return false;
+                return true;
+            });
+
+            const questions = [];
+            let currentQ = null;
+            
+            const qRegexTW = /^(\d+)[\.、]\s*\(([1-4A-Da-d]+)\)\s*(.*)/;
+            const qRegexCCNA = /^(?:QUESTION\s*\d+|第?\s*\d+\s*[題\.]|Q\d+[:\.]?)\s*(.*)/i;
+            const optRegex = /^\(?([A-H])\)?[\.、]\s*(.*)/i; 
+            const ansRegex = /(?:Correct\s*Answer|答案|解答|Ans(?:wer)?)[\s:：]*([A-Ha-h\s,]+)/i;
+
+            const pushCurrentQuestion = () => {
+                if (!currentQ) return;
+
+                const combinedText = currentQ.question + (currentQ.options.length === 0 ? "" : " " + currentQ.options.map(o => o.text).join(" "));
+                
+                if (currentQ.options.length === 0 && (combinedText.includes('①') || combinedText.includes('(1)'))) {
+                    let qText = combinedText.replace(/\(1\)/g, '①').replace(/\(2\)/g, '②').replace(/\(3\)/g, '③').replace(/\(4\)/g, '④');
+                    
+                    const opt1 = qText.indexOf('①');
+                    const opt2 = qText.indexOf('②');
+                    const opt3 = qText.indexOf('③');
+                    const opt4 = qText.indexOf('④');
+                    
+                    if (opt1 !== -1) {
+                        currentQ.question = qText.substring(0, opt1).trim();
+                        const t1 = qText.substring(opt1 + 1, opt2 !== -1 ? opt2 : qText.length).trim();
+                        const t2 = opt2 !== -1 ? qText.substring(opt2 + 1, opt3 !== -1 ? opt3 : qText.length).trim() : "";
+                        const t3 = opt3 !== -1 ? qText.substring(opt3 + 1, opt4 !== -1 ? opt4 : qText.length).trim() : "";
+                        const t4 = opt4 !== -1 ? qText.substring(opt4 + 1).trim() : "";
+                        
+                        if(t1) currentQ.options.push({ key: 'A', text: t1 });
+                        if(t2) currentQ.options.push({ key: 'B', text: t2 });
+                        if(t3) currentQ.options.push({ key: 'C', text: t3 });
+                        if(t4) currentQ.options.push({ key: 'D', text: t4 });
+                    }
+                }
+
+                if (currentQ.options.length > 0 && currentQ.answer.length > 0) {
+                    currentQ.question = currentQ.question.replace(/-\s+/g, '-').replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, '$1$2').trim();
+                    currentQ.options.forEach(opt => {
+                        opt.text = opt.text.replace(/-\s+/g, '-').replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, '$1$2').replace(/。$/, '').trim();
+                    });
+                    questions.push(currentQ);
+                }
+            };
+
+            for (let line of lines) {
+                let twMatch = line.match(qRegexTW);
+                if (twMatch) {
+                    pushCurrentQuestion();
+                    let ansStr = twMatch[2];
+                    let mappedAns = [];
+                    for(let char of ansStr) {
+                        if(char === '1' || char === 'A' || char === 'a') mappedAns.push('A');
+                        if(char === '2' || char === 'B' || char === 'b') mappedAns.push('B');
+                        if(char === '3' || char === 'C' || char === 'c') mappedAns.push('C');
+                        if(char === '4' || char === 'D' || char === 'd') mappedAns.push('D');
+                    }
+                    currentQ = { question: twMatch[3] || "", options: [], answer: mappedAns };
+                    continue;
+                }
+
+                let qMatch = line.match(qRegexCCNA);
+                if (qMatch) {
+                    pushCurrentQuestion();
+                    currentQ = { question: qMatch[1] || "", options: [], answer: [] };
+                    continue;
+                }
+
+                if (!currentQ) continue; 
+
+                let ansMatch = line.match(ansRegex);
+                if (ansMatch) {
+                    currentQ.answer = ansMatch[1].replace(/[^A-Ha-h]/gi, '').toUpperCase().split('');
+                    let cleanLine = line.replace(ansRegex, '').trim();
+                    if (cleanLine) {
+                        let optMatch = cleanLine.match(optRegex);
+                        if (optMatch) {
+                             currentQ.options.push({ key: optMatch[1].toUpperCase(), text: optMatch[2] });
+                        } else if (currentQ.options.length > 0) {
+                             currentQ.options[currentQ.options.length-1].text += ' ' + cleanLine;
+                        }
+                    }
+                    continue; 
+                }
+
+                let optMatch = line.match(optRegex);
+                if (optMatch) {
+                    currentQ.options.push({ key: optMatch[1].toUpperCase(), text: optMatch[2] });
+                    continue;
+                }
+                
+                if (currentQ.options.length === 0) {
+                    currentQ.question += (currentQ.question ? ' ' : '') + line;
+                } else if (currentQ.answer.length === 0) {
+                    currentQ.options[currentQ.options.length-1].text += ' ' + line;
+                }
+            }
+            
+            pushCurrentQuestion();
+            
+            questions.forEach(q => q.options.forEach(opt => opt.isCorrect = q.answer.includes(opt.key)));
+            return questions;
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function startQuiz() {
+            const text = document.getElementById('source-text').value;
+            if(!text) { alert("請輸入題庫內容！"); return; }
+            parsedQuestions = parseText(text);
+            if (parsedQuestions.length === 0) { alert("無法解析出任何題目，請檢查格式。"); return; }
+
+            let baseQuestions = JSON.parse(JSON.stringify(parsedQuestions));
+            const countType = document.querySelector('input[name="q-count"]:checked').value;
+            let selectedQuestions = [];
+
+            if (countType === 'custom') {
+                const customVal = document.getElementById('custom-q-count').value.trim();
+                if (customVal.includes('-')) {
+                    let parts = customVal.split('-');
+                    let start = parseInt(parts[0]);
+                    let end = parseInt(parts[1]);
+                    if (isNaN(start) || isNaN(end) || start < 1 || end < start) {
+                        alert("自訂範圍格式錯誤！請輸入如 3-50 的格式。");
+                        return;
+                    }
+                    end = Math.min(end, baseQuestions.length); 
+                    selectedQuestions = baseQuestions.slice(start - 1, end);
+                    if (document.getElementById('shuffle-questions').checked) {
+                        shuffleArray(selectedQuestions);
+                    }
+                } else {
+                    let limit = parseInt(customVal);
+                    if (isNaN(limit) || limit < 1) limit = baseQuestions.length;
+                    if (document.getElementById('shuffle-questions').checked) shuffleArray(baseQuestions);
+                    selectedQuestions = baseQuestions.slice(0, Math.min(limit, baseQuestions.length));
+                }
+            } else {
+                let limit = countType === 'all' ? baseQuestions.length : parseInt(countType);
+                if (document.getElementById('shuffle-questions').checked) shuffleArray(baseQuestions);
+                selectedQuestions = baseQuestions.slice(0, Math.min(limit, baseQuestions.length));
+            }
+
+            currentTestQuestions = selectedQuestions;
+
+            currentTestQuestions.forEach(q => {
+                if (document.getElementById('shuffle-options').checked) shuffleArray(q.options);
+                q.displayOptions = q.options.map((opt, index) => ({ ...opt, visualKey: String.fromCharCode(65 + index) }));
+                q.displayAnswer = q.displayOptions.filter(o => o.isCorrect).map(o => o.visualKey);
+            });
+
+            userAnswers = new Array(currentTestQuestions.length).fill(null);
+            currentQuestionIndex = 0; isQuizActive = true;
+            switchScreen('quiz-screen'); renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = currentTestQuestions[currentQuestionIndex];
+            document.getElementById('quiz-progress').innerText = `題目 ${currentQuestionIndex + 1} / ${currentTestQuestions.length}`;
+            document.getElementById('question-text').innerText = q.question;
+            
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+            
+            q.displayOptions.forEach(opt => {
+                const div = document.createElement('div');
+                div.className = 'option-label';
+                div.innerHTML = `<b>${opt.visualKey}.</b> ${opt.text}`;
+                div.onclick = () => {
+                    if (document.getElementById('submit-btn').style.display === 'none') return;
+                    if (q.displayAnswer.length > 1) div.classList.toggle('selected');
+                    else { document.querySelectorAll('.option-label').forEach(el => el.classList.remove('selected')); div.classList.add('selected'); }
+                    updateSubmitBtnState();
+                };
+                div.dataset.visualKey = opt.visualKey;
+                div.dataset.isCorrect = opt.isCorrect;
+                optionsContainer.appendChild(div);
+            });
+
+            document.getElementById('feedback-box').style.display = 'none';
+            document.getElementById('submit-btn').style.display = 'block';
+            document.getElementById('next-btn').style.display = 'none';
+            // BUG修復：確保每次渲染題目時，按鈕文字皆還原為「下一題」
+            document.getElementById('next-btn').innerText = '下一題 →'; 
+            updateSubmitBtnState();
+        }
+
+        function updateSubmitBtnState() {
+            const q = currentTestQuestions[currentQuestionIndex];
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = q.displayAnswer.length > 1 ? '確認送出 (多選題)' : '確認送出';
+        }
+
+        function submitAnswer() {
+            const q = currentTestQuestions[currentQuestionIndex];
+            const selectedElements = Array.from(document.querySelectorAll('.option-label.selected'));
+            const selectedVisualKeys = selectedElements.map(el => el.dataset.visualKey).sort();
+            
+            if (selectedVisualKeys.length === 0) { alert('請至少選擇一個答案！'); return; }
+
+            userAnswers[currentQuestionIndex] = selectedVisualKeys;
+            const isCorrect = JSON.stringify(selectedVisualKeys) === JSON.stringify(q.displayAnswer.sort());
+
+            document.querySelectorAll('.option-label').forEach(el => {
+                const isOptCorrect = el.dataset.isCorrect === 'true';
+                const isSelected = el.classList.contains('selected');
+                el.onclick = null; el.style.cursor = 'default'; 
+                if (isOptCorrect) el.classList.add('correct-ans');
+                else if (isSelected && !isOptCorrect) el.classList.add('wrong-ans');
+            });
+
+            const feedbackBox = document.getElementById('feedback-box');
+            feedbackBox.style.display = 'block';
+            if (isCorrect) {
+                feedbackBox.style.backgroundColor = 'var(--success-bg)';
+                feedbackBox.style.borderColor = 'var(--success-border)';
+                feedbackBox.style.color = 'var(--success-border)';
+                feedbackBox.innerHTML = '✓ 答對了！';
+            } else {
+                feedbackBox.style.backgroundColor = 'var(--danger-bg)';
+                feedbackBox.style.borderColor = 'var(--danger-border)';
+                feedbackBox.style.color = 'var(--danger-border)';
+                feedbackBox.innerHTML = '✗ 答錯了！正確答案是：' + q.displayAnswer.join(', ');
+                addToWrongQuestions(q);
+            }
+
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'block';
+            if (currentQuestionIndex === currentTestQuestions.length - 1) document.getElementById('next-btn').innerText = '查看成績 ★';
+        }
+
+        function nextQuestion() {
+            if (currentQuestionIndex < currentTestQuestions.length - 1) { currentQuestionIndex++; renderQuestion(); } 
+            else showResults();
+        }
+
+        function promptEndQuiz() { document.getElementById('end-modal').classList.add('active'); }
+        function closeModal() { document.getElementById('end-modal').classList.remove('active'); }
+        function forceEndQuiz() { closeModal(); currentTestQuestions = currentTestQuestions.slice(0, currentQuestionIndex + (userAnswers[currentQuestionIndex] ? 1 : 0)); showResults(); }
+
+        function showResults() {
+            isQuizActive = false; let correctCount = 0; let detailsHTML = '';
+            currentTestQuestions.forEach((q, i) => {
+                const uAns = userAnswers[i] || [];
+                const isCorrect = JSON.stringify(uAns.sort()) === JSON.stringify(q.displayAnswer.sort());
+                if (isCorrect) correctCount++;
+                detailsHTML += `
+                    <div class="detail-item" style="border-color: ${isCorrect ? 'var(--success-border)' : 'var(--danger-border)'};">
+                        <h4>Q${i+1}: ${q.question}</h4>
+                        <p style="color:var(--text-muted); font-size:0.9rem;">您的答案: ${uAns.join(', ') || '未作答'} | 正確答案: <b>${q.displayAnswer.join(', ')}</b></p>
+                    </div>`;
+            });
+
+            const total = currentTestQuestions.length;
+            document.getElementById('score-percent').innerText = `${total === 0 ? 0 : Math.round((correctCount / total) * 100)}%`;
+            document.getElementById('score-fraction').innerText = `${correctCount} / ${total}`;
+            document.getElementById('correct-count').innerText = correctCount;
+            document.getElementById('wrong-count-display').innerText = total - correctCount;
+            document.getElementById('details-container').innerHTML = detailsHTML;
+            switchScreen('result-screen');
+        }
+
+        function restartQuiz() { goHome(); window.scrollTo(0,0); }
+        function addToWrongQuestions(q) {
+            if (!wrongQuestions.some(wq => wq.question === q.question)) {
+                wrongQuestions.push(q); localStorage.setItem('quizForgeWrongQuestions', JSON.stringify(wrongQuestions)); updateWrongCountUI();
+            }
+        }
+        function updateWrongCountUI() { document.getElementById('header-wrong-count').innerText = wrongQuestions.length; }
+
+        function openFlashcards() { flashcardIndex = 0; switchScreen('flashcard-screen'); renderFlashcard(); }
+        
+        function renderFlashcard() {
+            document.getElementById('fc-inner').classList.remove('flipped');
+            if (wrongQuestions.length === 0) {
+                document.getElementById('empty-flashcard-msg').style.display = 'block'; document.getElementById('flashcard-content').style.display = 'none'; return;
+            }
+            document.getElementById('empty-flashcard-msg').style.display = 'none'; document.getElementById('flashcard-content').style.display = 'block';
+
+            const q = wrongQuestions[flashcardIndex];
+            document.getElementById('flashcard-progress').innerText = `進度：${flashcardIndex + 1} / ${wrongQuestions.length}`;
+            
+            let optsText = q.displayOptions.map(o => `<div style="margin-bottom: 8px;"><b>${o.visualKey}.</b> ${o.text}</div>`).join('');
+            document.getElementById('fc-q-text').innerHTML = `<h3 style="margin-top:0;">${q.question}</h3><div style="font-size:1rem; text-align:left; display:block; width: 100%;">${optsText}</div>`;
+            
+            let correctOptsText = q.displayOptions
+                .filter(o => o.isCorrect)
+                .map(o => `<div style="padding: 12px; border: 1px solid var(--success-border); border-radius: 8px; background: var(--success-bg); color: var(--success-border); text-align: left; margin-top: 10px; font-size: 1rem;"><b>${o.visualKey}.</b> ${o.text}</div>`)
+                .join('');
+                
+            document.getElementById('fc-a-text').innerHTML = `
+                <div style="color: var(--text-main); font-size: 1.1rem; text-align: left; margin-bottom: 15px;">${q.question}</div>
+                <div style="width: 100%;">${correctOptsText}</div>
+            `;
+        }
+        
+        function flipCard() { document.getElementById('fc-inner').classList.toggle('flipped'); }
+        function nextFlashcard() { if (wrongQuestions.length) { flashcardIndex = (flashcardIndex + 1) % wrongQuestions.length; renderFlashcard(); } }
+        function prevFlashcard() { if (wrongQuestions.length) { flashcardIndex = (flashcardIndex - 1 + wrongQuestions.length) % wrongQuestions.length; renderFlashcard(); } }
+        
+        function markLearned() {
+            if (!wrongQuestions.length) return;
+            wrongQuestions.splice(flashcardIndex, 1); localStorage.setItem('quizForgeWrongQuestions', JSON.stringify(wrongQuestions)); updateWrongCountUI();
+            if (flashcardIndex >= wrongQuestions.length && flashcardIndex > 0) flashcardIndex--;
+            renderFlashcard();
+        }
+
+        function clearAllFlashcards() {
+            if (confirm('確定要清空所有錯題紀錄嗎？此動作無法復原。')) {
+                wrongQuestions = [];
+                localStorage.removeItem('quizForgeWrongQuestions');
+                updateWrongCountUI();
+                renderFlashcard();
+            }
+        }
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            isQuizActive = (screenId === 'quiz-screen');
+        }
+        function goHome() { switchScreen('home-screen'); }
+    </script>
+    <a href='https://azurecloud1975.github.io/my-little-test/index2.html'>工作項目02：作業準備</a>
+</body>
+</html>
